@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <title>Nozomi's Smart Groups 🌊</title>
     <style>
-        /* 保持之前的蓝色美学 */
         body { font-family: sans-serif; background-color: #f0f8ff; color: #4682b4; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
         .header { display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 15px 25px; border-radius: 20px; box-shadow: 0 4px 15px rgba(162,210,255,0.2); }
         .main-content { display: flex; gap: 20px; }
@@ -16,8 +15,10 @@
         .slots-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
         .slot { height: 30px; background: #f8fbfe; border: 1px dashed #d0e4f5; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #a2d2ff; }
         .slot.filled { background: #a2d2ff; color: white; border-style: solid; font-weight: bold; cursor: pointer; }
-        button { background-color: #a2d2ff; color: white; border: none; padding: 10px 18px; border-radius: 15px; cursor: pointer; font-weight: bold; }
-        .save-all-btn { background-color: #4682b4; }
+        button { background-color: #a2d2ff; color: white; border: none; padding: 10px 18px; border-radius: 15px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        button:hover { opacity: 0.8; transform: translateY(-1px); }
+        .btn-save { background-color: #4682b4; }
+        .btn-share { background-color: #64b5f6; }
     </style>
 </head>
 <body>
@@ -25,8 +26,9 @@
 <div class="header">
     <h2 style="margin:0">Nozomi's Blue Jellyfish 🌊</h2>
     <div style="display:flex; gap:10px;">
-        <button class="save-all-btn" onclick="saveAll()">💾 存档</button>
-        <button onclick="copyShare()">🔗 分享</button>
+        <button class="btn-save" onclick="save()">💾 存档</button>
+        <button class="btn-share" onclick="exportData()">📤 导出暗号</button>
+        <button onclick="importData()">📥 导入暗号</button>
         <button onclick="resetAll()" style="background:#ccc;">清空</button>
     </div>
 </div>
@@ -43,21 +45,10 @@
     const chars = ["天祥院英智", "日日树涉", "姬宫桃李", "伏见弓弦", "冰鹰北斗", "明星昴流", "游木真", "衣更真绪", "守泽千秋", "深海奏汰", "南云铁虎", "高峯翠", "仙石忍", "天城一彩", "白鸟蓝良", "礼濑真宵", "风早巽", "乱凪砂", "巴日和", "七种茨", "涟纯", "斋宫宗", "影片美伽", "葵日向", "葵裕太", "天城磷音", "HiMERU", "樱河琥珀", "椎名丹希", "大神晃牙", "朔间零", "羽风薰", "乙狩阿多尼斯", "真白友也", "仁兔成鸣", "天满光", "紫之创", "莲巳敬人", "鬼龙红郎", "神崎飒马", "朱樱司", "月永雷欧", "濑名泉", "朔间凛月", "鸣上岚", "逆先夏目", "青叶纺", "春川宙", "三毛缟斑", "佐贺美阵", "椚章臣", "水月"];
     let groups = [[]];
 
-    window.onload = () => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const d = urlParams.get('s'); // 使用极简参数名 's'
-        if (d) {
-            // 解码数字代号
-            try {
-                groups = d.split('-').map(g => g.split(',').filter(x=>x!=='').map(i => chars[parseInt(i, 36)]));
-                saveAll(true); // 自动静默保存
-            } catch(e) { load(); }
-        } else { load(); }
-        render();
-    };
+    window.onload = () => { load(); render(); };
 
     function load() {
-        const local = localStorage.getItem('nozomi_v5');
+        const local = localStorage.getItem('nozomi_v6');
         if (local) groups = JSON.parse(local);
     }
 
@@ -94,25 +85,38 @@
 
     function remove(gi, mi) { groups[gi].splice(mi, 1); render(); }
 
-    function saveAll(silent = false) {
-        localStorage.setItem('nozomi_v5', JSON.stringify(groups));
-        if(!silent) alert("进度已保存到本地！✨");
+    function save() {
+        localStorage.setItem('nozomi_v6', JSON.stringify(groups));
+        alert("进度已保存！✨");
     }
 
-    function resetAll() { if(confirm("确定清空？")){ groups=[[]]; localStorage.removeItem('nozomi_v5'); render(); } }
+    function resetAll() { if(confirm("确定清空？")){ groups=[[]]; localStorage.removeItem('nozomi_v6'); render(); } }
 
-    function copyShare() {
-        // 将名字转换回数字代号以缩短链接
-        const shortData = groups.map(g => g.map(name => chars.indexOf(name).toString(36)).join(',')).join('-');
-        const url = window.location.origin + window.location.pathname + '?s=' + shortData;
-        
-        const el = document.createElement('textarea');
-        el.value = url;
-        document.body.appendChild(el);
-        el.select();
-        document.execCommand('copy');
-        document.body.removeChild(el);
-        alert("分享链接已缩短并复制！快发给同好吧~ 🔗");
+    // 导出暗号
+    function exportData() {
+        const code = groups.map(g => g.map(name => chars.indexOf(name).toString(36)).join(',')).join('-');
+        const dummy = document.createElement("textarea");
+        document.body.appendChild(dummy);
+        dummy.value = code;
+        dummy.select();
+        document.execCommand("copy");
+        document.body.removeChild(dummy);
+        alert("分组暗号已复制！快把这段代码发给朋友，让他们在网页里导入吧~ 🗝️");
+    }
+
+    // 导入暗号
+    function importData() {
+        const code = prompt("请输入朋友发给你的分组暗号：");
+        if (code) {
+            try {
+                groups = code.split('-').map(g => g.split(',').filter(x=>x!=='').map(i => chars[parseInt(i, 36)]));
+                render();
+                save();
+                alert("导入成功！已为你自动保存到本地。✨");
+            } catch(e) {
+                alert("暗号好像不对哦，检查一下是不是复制全了？");
+            }
+        }
     }
 </script>
 </body>
