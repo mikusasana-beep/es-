@@ -2,39 +2,41 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>Nozomi 的自动顺延分组工具</title>
+    <title>Nozomi 的蓝色水母分组工具 (可撤销版) 🌊</title>
     <style>
         body {
             font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
-            background-color: #f4f9fc;
-            color: #5a7d9a;
+            background-color: #f0f8ff;
+            color: #4682b4;
             padding: 20px;
             display: flex;
             flex-direction: column;
             gap: 20px;
         }
-        .main-content {
+        .header {
             display: flex;
-            gap: 20px;
+            justify-content: space-between;
+            align-items: center;
+            background: #fff;
+            padding: 15px 25px;
+            border-radius: 20px;
+            box-shadow: 0 4px 15px rgba(162, 210, 255, 0.2);
         }
+        .main-content { display: flex; gap: 20px; }
         .pool-section {
             flex: 1.5;
             background: white;
             padding: 20px;
             border-radius: 15px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            max-height: 85vh;
+            max-height: 80vh;
             overflow-y: auto;
         }
         .result-section {
             flex: 2;
-            background: #eef5ff;
+            background: #e1f0ff;
             padding: 20px;
             border-radius: 15px;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            max-height: 85vh;
+            max-height: 80vh;
             overflow-y: auto;
         }
         .character-grid {
@@ -46,33 +48,21 @@
         .char-item {
             padding: 8px 4px;
             background: #fff;
-            border: 1px solid #d0e4f5;
+            border: 1px solid #bde0fe;
             border-radius: 8px;
             text-align: center;
             cursor: pointer;
             font-size: 12px;
             transition: all 0.2s;
+            user-select: none;
         }
-        .char-item:hover { background: #e3f2fd; transform: translateY(-2px); }
-        
+        .char-item:hover { background: #e3f2fd; transform: translateY(-2px); border-color: #a2d2ff; }
         .group-card {
             background: white;
             padding: 15px;
             border-radius: 12px;
             border-left: 5px solid #a2d2ff;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.03);
-        }
-        .group-title {
-            font-weight: bold;
-            color: #4a90e2;
-            margin-bottom: 10px;
-            display: flex;
-            justify-content: space-between;
-        }
-        .slots-grid {
-            display: grid;
-            grid-template-columns: repeat(6, 1fr);
-            gap: 5px;
+            margin-bottom: 15px;
         }
         .slot {
             height: 28px;
@@ -84,98 +74,64 @@
             justify-content: center;
             font-size: 11px;
             color: #a2d2ff;
+            cursor: pointer; /* 变成手势提示可以点 */
+            transition: 0.2s;
         }
-        .slot.filled {
-            background: #a2d2ff;
+        .slot.filled { background: #a2d2ff; color: white; border-style: solid; }
+        .slot.filled:hover { background: #ffadad; border-color: #ffadad; } /* 悬停变红提示取消 */
+        .slot.filled:hover::after { content: ' ×'; } /* 增加一个小叉叉 */
+        
+        .slots-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+        button {
+            background-color: #a2d2ff;
             color: white;
-            border-style: solid;
-            animation: popIn 0.3s ease;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: 0.3s;
         }
-        @keyframes popIn {
-            0% { transform: scale(0.8); }
-            100% { transform: scale(1); }
-        }
-        .tip { font-size: 13px; color: #88a; margin-bottom: 10px; }
+        button:hover { background-color: #89c2ff; }
+        .tip-bar { font-size: 12px; color: #88a; margin-top: 5px; }
     </style>
 </head>
 <body>
 
-<div class="tip">✨ 提示：点击角色进行分组。如果当前组已有该角色，Nozomi 会自动帮他顺延到下一组哦。</div>
+<div class="header">
+    <h2 style="margin:0">Nozomi's Blue Jellyfish 🌊</h2>
+    <div>
+        <button onclick="copyShareLink()">🔗 复制分享链接</button>
+        <button onclick="resetAll()" style="background:#ccc; margin-left:10px;">清空重置</button>
+    </div>
+</div>
 
 <div class="main-content">
     <div class="pool-section">
         <h3>角色池</h3>
+        <div class="tip-bar">点击左侧选择，若点错，可在右侧点击该名字取消。</div>
         <div class="character-grid" id="charPool"></div>
     </div>
-
-    <div class="result-section" id="groupsContainer">
-        </div>
+    <div class="result-section" id="groupsContainer"></div>
 </div>
 
 <script>
+    const allCharacters = ["天祥院英智", "日日树涉", "姬宫桃李", "伏见弓弦", "冰鹰北斗", "明星昴流", "游木真", "衣更真绪", "守泽千秋", "深海奏汰", "南云铁虎", "高峯翠", "仙石忍", "乱凪砂", "巴日和", "七种茨", "涟纯", "斋宫宗", "影片美伽", "葵日向", "葵裕太", "大神晃牙", "朔间零", "羽风薰", "乙狩阿多尼斯", "真白友也", "仁兔成鸣", "天满光", "紫之创", "莲巳敬人", "鬼龙红郎", "神崎飒马", "朱樱司", "月永雷欧", "濑名泉", "朔间凛月", "鸣上岚", "逆先夏目", "青叶纺", "春川宙", "三毛缟斑"];
+    
+    let groups = [[]];
+
     window.onload = function() {
-        const allCharacters = [
-            "天祥院英智", "日日树涉", "姬宫桃李", "伏见弓弦", "冰鹰北斗", "明星昴流", "游木真", "衣更真绪",
-            "守泽千秋", "深海奏汰", "南云铁虎", "高峯翠", "仙石忍", "乱凪砂", "巴日和", "七种茨", "涟纯",
-            "斋宫宗", "影片美伽", "葵日向", "葵裕太",  "大神晃牙", "朔间零", "羽风薰", "乙狩阿多尼斯", 
-           "真白友也", "仁兔成鸣", "天满光", "紫之创", "莲巳敬人", "鬼龙红郎", "神崎飒马",
-            "朱樱司", "月永雷欧", "濑名泉", "朔间凛月", "鸣上岚", "逆先夏目", "青叶纺", "春川宙", "三毛缟斑"
-        ];
+        const params = new URLSearchParams(window.location.search);
+        const data = params.get('data');
+        if (data) {
+            try { groups = JSON.parse(decodeURIComponent(data)); } catch(e) {}
+        }
+        renderPool();
+        renderGroups();
+    };
 
-        let groups = [[]]; // 存储所有组的数组
-
+    function renderPool() {
         const pool = document.getElementById('charPool');
-        const container = document.getElementById('groupsContainer');
-
-        // 初始化渲染分组
-        function renderGroups() {
-            container.innerHTML = '';
-            groups.forEach((group, gIdx) => {
-                const card = document.createElement('div');
-                card.className = 'group-card';
-                
-                let slotsHtml = '';
-                for(let i=0; i<12; i++) {
-                    if(group[i]) {
-                        slotsHtml += `<div class="slot filled">${group[i]}</div>`;
-                    } else {
-                        slotsHtml += `<div class="slot">待选</div>`;
-                    }
-                }
-
-                card.innerHTML = `
-                    <div class="group-title">第 ${gIdx + 1} 组 <span>(${group.length}/12)</span></div>
-                    <div class="slots-grid">${slotsHtml}</div>
-                `;
-                container.appendChild(card);
-            });
-        }
-
-        // 处理点击选人
-        function handleSelect(name) {
-            let targetGroupIdx = -1;
-
-            // 寻找合适的组：既没满12人，也没包含这个角色
-            for (let i = 0; i < groups.length; i++) {
-                if (groups[i].length < 12 && !groups[i].includes(name)) {
-                    targetGroupIdx = i;
-                    break;
-                }
-            }
-
-            // 如果现有的组都不合适（比如都含这个角色，或者都满了），就开新组
-            if (targetGroupIdx === -1) {
-                groups.push([name]);
-            } else {
-                groups[targetGroupIdx].push(name);
-            }
-
-            renderGroups();
-            // 自动滚动到底部，方便看新组
-            container.scrollTop = container.scrollHeight;
-        }
-
-        // 生成左侧列表
+        pool.innerHTML = '';
         allCharacters.forEach(name => {
             const div = document.createElement('div');
             div.className = 'char-item';
@@ -183,10 +139,55 @@
             div.onclick = () => handleSelect(name);
             pool.appendChild(div);
         });
+    }
 
-        renderGroups(); // 初始渲染
-    };
+    function handleSelect(name) {
+        let targetIdx = groups.findIndex(g => g.length < 12 && !g.includes(name));
+        if (targetIdx === -1) groups.push([name]);
+        else groups[targetIdx].push(name);
+        renderGroups();
+    }
+
+    // 新增：取消选择的功能
+    function removeMember(gIdx, mIdx) {
+        groups[gIdx].splice(mIdx, 1);
+        // 如果这组空了且不是第一组，可以删掉这组，或者留着。这里我们留着空位方便看。
+        renderGroups();
+    }
+
+    function renderGroups() {
+        const container = document.getElementById('groupsContainer');
+        container.innerHTML = '';
+        groups.forEach((group, gIdx) => {
+            const card = document.createElement('div');
+            card.className = 'group-card';
+            let slots = '';
+            for(let i=0; i<12; i++) {
+                if(group[i]) {
+                    slots += `<div class="slot filled" onclick="removeMember(${gIdx}, ${i})">${group[i]}</div>`;
+                } else {
+                    slots += `<div class="slot">待选</div>`;
+                }
+            }
+            card.innerHTML = `<div style="font-weight:bold;margin-bottom:10px">第 ${gIdx+1} 组 (${group.length}/12)</div><div class="slots-grid">${slots}</div>`;
+            container.appendChild(card);
+        });
+    }
+
+    function resetAll() {
+        if(confirm("确定要清空所有分组吗？")) {
+            groups = [[]];
+            renderGroups();
+        }
+    }
+
+    function copyShareLink() {
+        const dataStr = encodeURIComponent(JSON.stringify(groups));
+        const url = window.location.origin + window.location.pathname + '?data=' + dataStr;
+        navigator.clipboard.writeText(url).then(() => {
+            alert("链接已生成并存入剪贴板！去分享给朋友吧~");
+        });
+    }
 </script>
-
 </body>
 </html>
