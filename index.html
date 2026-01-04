@@ -118,9 +118,9 @@
 <div class="header">
     <h2 style="margin:0">Nozomi's Multi-Jellyfish 🌊</h2>
     <div class="btn-group">
-        <button class="save-all-btn" onclick="saveAllToLocal()">💾 点击存档（手动确认）</button>
-        <button onclick="copyShareLink()">🔗 复制分享链接</button>
-        <button onclick="resetAll()" style="background:#ccc;">彻底清空</button>
+        <button class="save-all-btn" onclick="saveData()">💾 点击存档</button>
+        <button onclick="shareData()">🔗 复制分享链接</button>
+        <button onclick="resetData()" style="background:#ccc;">彻底清空</button>
     </div>
 </div>
 
@@ -140,112 +140,104 @@
 </div>
 
 <script>
-    const allCharacters = ["天祥院英智", "日日树涉", "姬宫桃李", "伏见弓弦", "冰鹰北斗", "明星昴流", "游木真", "衣更真绪", "守泽千秋", "深海奏汰", "南云铁虎", "高峯翠", "仙石忍", "乱凪砂", "巴日和", "七种茨", "涟纯", "斋宫宗", "影片美伽", "葵日向", "葵裕太", "大神晃牙", "朔间零", "羽风薰", "乙狩阿多尼斯", "真白友也", "仁兔成鸣", "天满光", "紫之创", "莲巳敬人", "鬼龙红郎", "神崎飒马", "朱樱司", "月永雷欧", "濑名泉", "朔间凛月", "鸣上岚", "逆先夏目", "青叶纺", "春川宙", "三毛缟斑"];
+    const STORAGE_KEY = 'nozomi_jellyfish_v_final';
+    const chars = ["天祥院英智", "日日树涉", "姬宫桃李", "伏见弓弦", "冰鹰北斗", "明星昴流", "游木真", "衣更真绪", "守泽千秋", "深海奏汰", "南云铁虎", "高峯翠", "仙石忍", "天城一彩", "白鸟蓝良", "礼濑真宵", "风早巽", "乱凪砂", "巴日和", "七种茨", "涟纯", "斋宫宗", "影片美伽", "葵日向", "葵裕太", "天城磷音", "HiMERU", "樱河琥珀", "椎名丹希", "大神晃牙", "朔间零", "羽风薰", "乙狩阿多尼斯", "真白友也", "仁兔成鸣", "天满光", "紫之创", "莲巳敬人", "鬼龙红郎", "神崎飒马", "朱樱司", "月永雷欧", "濑名泉", "朔间凛月", "鸣上岚", "逆先夏目", "青叶纺", "春川宙", "三毛缟斑"];
     
-    let groups = [[]]; 
+    let groups = [[]];
 
-    window.onload = function() {
-        const params = new URLSearchParams(window.location.search);
-        const urlData = params.get('data');
+    window.onload = () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlData = urlParams.get('d');
+
         if (urlData) {
-            try { groups = JSON.parse(decodeURIComponent(urlData)); } catch(e) { loadLocal(); }
+            try {
+                const parsed = JSON.parse(decodeURIComponent(escape(atob(urlData))));
+                if (Array.isArray(parsed)) {
+                    groups = parsed;
+                    saveData(true); 
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
+            } catch(e) { loadData(); }
         } else {
-            loadLocal();
+            loadData();
         }
-        renderPool();
-        renderGroups();
+        render();
     };
 
-    function loadLocal() {
-        const local = localStorage.getItem('nozomi_multi_v4');
-        if (local) groups = JSON.parse(local);
+    function loadData() {
+        const local = localStorage.getItem(STORAGE_KEY);
+        if (local) {
+            try { groups = JSON.parse(local); } catch(e) { groups = [[]]; }
+        }
     }
 
-    function renderPool() {
+    function render() {
         const pool = document.getElementById('charPool');
-        allCharacters.forEach(name => {
+        if(!pool) return;
+        pool.innerHTML = '';
+        chars.forEach(name => {
             const div = document.createElement('div');
             div.className = 'char-item';
             div.innerText = name;
-            div.onclick = () => handleAutoSpreadSelect(name);
+            div.onclick = () => {
+                let f = false;
+                for(let g of groups){ if(g.length<12 && !g.includes(name)){ g.push(name); f=true; break; } }
+                if(!f) groups.push([name]);
+                render();
+            };
             pool.appendChild(div);
         });
-    }
 
-    // 核心逻辑：自动往后找空位
-    function handleAutoSpreadSelect(name) {
-        // 从第一组开始往后找
-        let found = false;
-        for (let i = 0; i < groups.length; i++) {
-            // 如果这一组没满，而且这一组还没选过这个角色
-            if (groups[i].length < 12 && !groups[i].includes(name)) {
-                groups[i].push(name);
-                found = true;
-                break;
-            }
-        }
-
-        // 如果所有组都不能放这个角色了（要么满了，要么都有他了），就新开一组
-        if (!found) {
-            groups.push([name]);
-        }
-        renderGroups();
-    }
-
-    function addNewGroup() {
-        groups.push([]);
-        renderGroups();
-    }
-
-    function removeMember(gIdx, mIdx) {
-        groups[gIdx].splice(mIdx, 1);
-        renderGroups();
-    }
-
-    function renderGroups() {
         const container = document.getElementById('groupsContainer');
+        if(!container) return;
         container.innerHTML = '';
-        groups.forEach((group, gIdx) => {
+        groups.forEach((group, gi) => {
             const card = document.createElement('div');
             card.className = 'group-card';
             let slots = '';
             for(let i=0; i<12; i++) {
-                if(group[i]) {
-                    slots += `<div class="slot filled" onclick="removeMember(${gIdx}, ${i})">${group[i]}</div>`;
-                } else {
-                    slots += `<div class="slot">待选</div>`;
-                }
+                if(group[i]) slots += `<div class="slot filled" onclick="removeMember(${gi},${i})">${group[i]}</div>`;
+                else slots += `<div class="slot">待选</div>`;
             }
-            card.innerHTML = `<div style="font-weight:bold;margin-bottom:10px">第 ${gIdx+1} 组 (${group.length}/12)</div><div class="slots-grid">${slots}</div>`;
+            card.innerHTML = `<div style="font-weight:bold;margin-bottom:8px">第 ${gi+1} 组 (${group.length}/12)</div><div class="slots-grid">${slots}</div>`;
             container.appendChild(card);
         });
     }
 
-    function saveAllToLocal() {
-        localStorage.setItem('nozomi_multi_v4', JSON.stringify(groups));
-        const toast = document.getElementById("toast");
-        toast.className = "show";
-        setTimeout(() => { toast.className = ""; }, 3000);
+    function removeMember(gi, mi) { groups[gi].splice(mi, 1); render(); }
+
+    function addNewGroup() {
+        groups.push([]);
+        render();
     }
 
-    function resetAll() {
-        if(confirm("确定彻底清空所有数据吗？")) {
-            groups = [[]];
-            localStorage.removeItem('nozomi_multi_v4');
-            renderGroups();
+    function saveData(silent = false) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(groups));
+        if(!silent) {
+            const toast = document.getElementById("toast");
+            toast.className = "show";
+            setTimeout(() => { toast.className = ""; }, 3000);
         }
     }
 
-    function copyShareLink() {
-        const dataStr = encodeURIComponent(JSON.stringify(groups));
-        const url = window.location.origin + window.location.pathname + '?data=' + dataStr;
-        const textArea = document.createElement("textarea");
-        textArea.value = url;
-        document.body.appendChild(textArea);
-        textArea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textArea);
-        alert("包含当前所有进度的链接已复制！✨");
+    function resetData() { 
+        if(confirm("确定清空所有本地进度吗？")){ 
+            groups=[[]]; 
+            localStorage.removeItem(STORAGE_KEY); 
+            render(); 
+        } 
+    }
+
+    function shareData() {
+        const data = btoa(unescape(encodeURIComponent(JSON.stringify(groups))));
+        const url = window.location.origin + window.location.pathname + '?d=' + data;
+        const dummy = document.createElement("textarea");
+        document.body.appendChild(dummy);
+        dummy.value = url;
+        dummy.select();
+        document.execCommand("copy");
+        document.body.removeChild(dummy);
+        alert("包含当前进度的链接已复制到剪贴板！🔗");
     }
 </script>
 </body>
