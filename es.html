@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Nozomi 的自动顺延分组工具</title>
+    <style>
+        body {
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background-color: #f4f9fc;
+            color: #5a7d9a;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .main-content {
+            display: flex;
+            gap: 20px;
+        }
+        .pool-section {
+            flex: 1.5;
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+        .result-section {
+            flex: 2;
+            background: #eef5ff;
+            padding: 20px;
+            border-radius: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+        .character-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(85px, 1fr));
+            gap: 8px;
+            margin-top: 15px;
+        }
+        .char-item {
+            padding: 8px 4px;
+            background: #fff;
+            border: 1px solid #d0e4f5;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        .char-item:hover { background: #e3f2fd; transform: translateY(-2px); }
+        
+        .group-card {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            border-left: 5px solid #a2d2ff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+        }
+        .group-title {
+            font-weight: bold;
+            color: #4a90e2;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .slots-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 5px;
+        }
+        .slot {
+            height: 28px;
+            background: #f8fbfe;
+            border: 1px dashed #d0e4f5;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            color: #a2d2ff;
+        }
+        .slot.filled {
+            background: #a2d2ff;
+            color: white;
+            border-style: solid;
+            animation: popIn 0.3s ease;
+        }
+        @keyframes popIn {
+            0% { transform: scale(0.8); }
+            100% { transform: scale(1); }
+        }
+        .tip { font-size: 13px; color: #88a; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="tip">✨ 提示：点击角色进行分组。如果当前组已有该角色，Nozomi 会自动帮他顺延到下一组哦。</div>
+
+<div class="main-content">
+    <div class="pool-section">
+        <h3>角色池</h3>
+        <div class="character-grid" id="charPool"></div>
+    </div>
+
+    <div class="result-section" id="groupsContainer">
+        </div>
+</div>
+
+<script>
+    window.onload = function() {
+        const allCharacters = [
+            "天祥院英智", "日日树涉", "姬宫桃李", "伏见弓弦", "冰鹰北斗", "明星昴流", "游木真", "衣更真绪",
+            "守泽千秋", "深海奏汰", "南云铁虎", "高峯翠", "仙石忍", "乱凪砂", "巴日和", "七种茨", "涟纯",
+            "斋宫宗", "影片美伽", "葵日向", "葵裕太",  "大神晃牙", "朔间零", "羽风薰", "乙狩阿多尼斯", 
+           "真白友也", "仁兔成鸣", "天满光", "紫之创", "莲巳敬人", "鬼龙红郎", "神崎飒马",
+            "朱樱司", "月永雷欧", "濑名泉", "朔间凛月", "鸣上岚", "逆先夏目", "青叶纺", "春川宙", "三毛缟斑"
+        ];
+
+        let groups = [[]]; // 存储所有组的数组
+
+        const pool = document.getElementById('charPool');
+        const container = document.getElementById('groupsContainer');
+
+        // 初始化渲染分组
+        function renderGroups() {
+            container.innerHTML = '';
+            groups.forEach((group, gIdx) => {
+                const card = document.createElement('div');
+                card.className = 'group-card';
+                
+                let slotsHtml = '';
+                for(let i=0; i<12; i++) {
+                    if(group[i]) {
+                        slotsHtml += `<div class="slot filled">${group[i]}</div>`;
+                    } else {
+                        slotsHtml += `<div class="slot">待选</div>`;
+                    }
+                }
+
+                card.innerHTML = `
+                    <div class="group-title">第 ${gIdx + 1} 组 <span>(${group.length}/12)</span></div>
+                    <div class="slots-grid">${slotsHtml}</div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // 处理点击选人
+        function handleSelect(name) {
+            let targetGroupIdx = -1;
+
+            // 寻找合适的组：既没满12人，也没包含这个角色
+            for (let i = 0; i < groups.length; i++) {
+                if (groups[i].length < 12 && !groups[i].includes(name)) {
+                    targetGroupIdx = i;
+                    break;
+                }
+            }
+
+            // 如果现有的组都不合适（比如都含这个角色，或者都满了），就开新组
+            if (targetGroupIdx === -1) {
+                groups.push([name]);
+            } else {
+                groups[targetGroupIdx].push(name);
+            }
+
+            renderGroups();
+            // 自动滚动到底部，方便看新组
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // 生成左侧列表
+        allCharacters.forEach(name => {
+            const div = document.createElement('div');
+            div.className = 'char-item';
+            div.innerText = name;
+            div.onclick = () => handleSelect(name);
+            pool.appendChild(div);
+        });
+
+        renderGroups(); // 初始渲染
+    };
+</script>
+
+</body>
+</html>
